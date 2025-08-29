@@ -1,0 +1,165 @@
+ 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  constructing network
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% init data structure with default values
+data = init_ms_sys_data;  
+
+% change values to fit the task
+data.num = 30; 			% number of masses
+data.show_steps = 1000; % show simulation step every 5000 steps
+
+% range for randomly initialized input weights
+data.in_range = [-1 1];  
+
+% defined area for the masses to be places
+data.px_lim = [0 10];
+data.py_lim = [0 10];
+
+%  defining parameter ranges for
+%  spring properties (
+%  i.e., nonlinear stiffness and damping functions
+data.k_lim = [1 100; 10 100];  
+data.d_lim = [1 100; 10 100];
+
+data.show_plot = 0;
+data.readout_type = 'LENGTHS'; % using lengths as readout
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% loading data for learning and testing
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+load('data_NARMA/NARMA-L2.mat');
+
+% defines data length of learning data, testing data and washout time
+wash_out = 100000;		
+start = 60000; 
+len = 300000;
+len_test = 30000;
+U = dat.un(start:len,1);  
+Y = dat.yn(start:len,1); 
+
+% testing data is taken from another part of the data set
+dat_test = dat;  
+U_test = dat_test.un(len+1:len+len_test,1);  % use later data for testing
+Y_test = dat_test.yn(len+1:len+len_test,1);  
+
+disp('Initializing and testing network...'); 
+% randomly initialize a network with the given parameter
+net = init_ms_sys_net(data); 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  simulating network (model 1)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tic;
+[net2_1, sim_data_1] = simulate_ms_sys_1(net, U);
+
+% calculate optimal output weights with linear regression
+if (strcmp(net.readout_type,'LENGTHS'))
+    X = sim_data_1.D(wash_out:end,:);  % throw washout away
+else
+    X = sim_data_1.Sx(wash_out:end,:);  % throw washout away
+end
+
+Yw = Y(wash_out:end,:);
+W_out = X\Yw;
+
+% start testing with the state right after the learning phase
+net_test_1 = net2_1;
+net_test_1.W_out = W_out; % set output weights to the optimal ones
+
+% testing model 1
+[net_test_out_1, sim_data_test_1] = simulate_ms_sys_1(net_test_1, U_test);
+t1 = toc;
+
+disp(['MSE_1: ', num2str(mean_squared_error(Y_test, sim_data_test_1.O))])
+fprintf('t1: %.2fs\n', t1)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  simulating network (model 2)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tic;
+[net2_2, sim_data_2] = simulate_ms_sys_2(net, U);
+
+% calculate optimal output weights with linear regression
+if (strcmp(net.readout_type,'LENGTHS'))
+    X = sim_data_2.D(wash_out:end,:);  % throw washout away
+else
+    X = sim_data_2.Sx(wash_out:end,:);  % throw washout away
+end
+
+Yw = Y(wash_out:end,:);
+W_out = X\Yw;
+
+% start testing with the state right after the learning phase
+net_test_2 = net2_2;
+net_test_2.W_out = W_out; % set output weights to the optimal ones
+
+% testing model 2
+[net_test_out_2, sim_data_test_2] = simulate_ms_sys_2(net_test_2, U_test);
+t2 = toc;
+
+disp(['MSE_2: ', num2str(mean_squared_error(Y_test, sim_data_test_2.O))])
+fprintf('t2: %.2fs\n', t2)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%  simulating network (model 3)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tic;
+[net2_3, sim_data_3] = simulate_ms_sys_3(net, U);
+
+% calculate optimal output weights with linear regression
+if (strcmp(net.readout_type,'LENGTHS'))
+    X = sim_data_3.D(wash_out:end,:);  % throw washout away
+else
+    X = sim_data_3.Sx(wash_out:end,:);  % throw washout away
+end
+
+Yw = Y(wash_out:end,:);
+W_out = X\Yw;
+
+% start testing with the state right after the learning phase
+net_test_3 = net2_3;
+net_test_3.W_out = W_out; % set output weights to the optimal ones
+
+% testing model 3
+[net_test_out_3, sim_data_test_3] = simulate_ms_sys_3(net_test_3, U_test);
+t3 = toc;
+
+disp(['MSE_3: ', num2str(mean_squared_error(Y_test, sim_data_test_3.O))])
+fprintf('t3: %.2fs\n', t3)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Visualization
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+figure;
+set(gcf,'Color',[1.0 1.0 1.0]); % 深蓝色背景
+ax = gca;
+set(ax,'Color',[0.2 0.2 0.3],'XColor',[0.8 0.8 1],'YColor',[0.8 0.8 1],...
+       'GridColor',[0.4 0.4 0.6],'MinorGridColor',[0.3 0.3 0.4]);
+
+% 绘制目标输出 (亮黄色)
+p_target = plot(Y_test,'Color',[1 0.9 0.2],'LineWidth',2.5); 
+
+hold on;
+% 模型1输出 (绿色)
+p_model1 = plot(sim_data_test_1.O,'--','Color',[0.2 0.8 0.2],'LineWidth',2); 
+% 模型2输出 (橙色)
+p_model2 = plot(sim_data_test_2.O,':','Color',[1 0.6 0.2],'LineWidth',2.2); 
+% 模型3输出 (蓝色)
+p_model3 = plot(sim_data_test_3.O,'-.','Color',[0.2 0.6 1],'LineWidth',2);
+
+% 增强可视化效果
+grid on;
+box on;
+xlim([0 3000]);
+title('NARMA (3000 steps)','Color','k','FontSize',16);
+xlabel('step','Color','w','FontSize',14);
+ylabel('output','Color','w','FontSize',14);
+
+% 自定义图例
+leg = legend([p_target, p_model1, p_model2, p_model3],...
+    {'target','SD','RB','BH'},...
+    'TextColor','w','Location','best');
+set(leg,'Color',[0.3 0.3 0.4]);
+
